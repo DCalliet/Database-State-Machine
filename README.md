@@ -29,11 +29,6 @@ an existing table or database (respectively) feel free to change those names!
 - **db_management.py help**
 - **db_management.py save_db <state name>**  gives your working directory a state to be saved as when swapped for a load.
 - **db_management.py stash_db <state name>**  stashes a copy of your database with a state we use to identify it
-- **db_management.py load_db <state name>** finds the db state, and loads it as your working db. Your current one gets stashed away.
-
-
-##Future Improvements
-=====================
-- **load_db**  allow user to drop instead of being forced to stash the current working db
-- **delete_state <state name> (default:all)** - allow user to delete a single or all state db's *(can remove state from working but not delete it)*
+- **db_management.py load_db <state name>** finds the db state, and loads it as your working db. Your current one has the option to get stashed away.
+- **db_management.py delete_state <state name> (default:all)** - allow user to delete a single or all state db's *(can remove state from working but not delete it)*
 

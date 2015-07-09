@@ -105,14 +105,9 @@ class SaveDB(CommandBase):
                 else:
                     print "Would you mind providing us a status to use?"
                     new_state = sys.stdin.readline().strip()
-            try:
-                cursor.execute("CREATE TABLE {table} (name char(255) PRIMARY KEY);".format(table=db.STATE_TABLE_NAME))
-                con.commit()
-            except psycopg2.ProgrammingError:
-                con.rollback()
-                
-            
+
             query = '''
+                CREATE TABLE IF NOT EXISTS {table} (name char(255) PRIMARY KEY);
                 DELETE FROM {table};
                 INSERT INTO {table} VALUES ('{state}');
             '''.format(table=db.STATE_TABLE_NAME, state=new_state)
@@ -181,16 +176,9 @@ class StashDB(CommandBase):
         try:
             con = psycopg2.connect(database=new_state, user=db.USER)
             cursor = con.cursor()
-            
-            try:
-                cursor.execute("CREATE TABLE {table} (name char(255) PRIMARY KEY);".format(table=db.STATE_TABLE_NAME))
-                con.commit()
-            except psycopg2.ProgrammingError:
-                con.rollback()
-                cursor.execute("DELETE FROM {table};".format(table=db.STATE_TABLE_NAME))
-                con.commit()
-    
-            query = ''' 
+            query = '''
+                CREATE TABLE IF NOT EXISTS {table} (name char(255) PRIMARY KEY);
+                DELETE FROM {table};
                 INSERT INTO {table} VALUES ('{state}');
             '''.format(table=db.STATE_TABLE_NAME, state=options[0])
             cursor.execute(query)
@@ -235,11 +223,73 @@ class LoadDB(CommandBase):
     def help(self):
         print self.helptext
 
+    @staticmethod
+    def overwrite(con, cursor, target):
+        con = psycopg2.connect(database='{tmp_db}'.format(tmp_db=db.TEMP_DATABASE_NAME), user=db.USER)
+        cursor = con.cursor()
+        query = '''
+        DROP DATABASE {base};
+        ALTER DATABASE {target} RENAME TO {base};
+        '''.format(base=db.NAME, target=target)
+        try:
+            cursor.execute(query)
+            con.commit()
+        except psycopg2.ProgrammingError:
+            print "Unexpected Error"
+            return False
+        finally:
+            if con:
+                con.close()
+
+    @staticmethod
+    def switch(con, cursor, target, rows, new_state=None):
+        need_table = False
+        if new_state is None:
+            need_table = True
+            print "Would you mind providing us a status to use?"
+            new_state = sys.stdin.readline().strip()
+        while '{base}_{state}'.format(base=db.NAME, state=new_state) in rows:
+            print "A database already has this status, create with a timestamp? (Y/N)"
+            if sys.stdin.readline().strip().lower() == 'y':
+                time = datetime.datetime.now().strftime('%b%d_%H_%M')
+                new_state += time
+            else:
+                print "Would you mind providing us a status to use?"
+                new_state = sys.stdin.readline().strip()
+        if need_table:
+            try:
+                cursor.execute('''
+                CREATE TABLE IF NOT EXISTS {table} (name char(255) PRIMARY KEY);
+                DELETE FROM {table};
+                INSERT INTO {table} VALUES ('{state}');
+                '''.format(table=db.STATE_TABLE_NAME))
+                con.commit()
+            except psycopg2.ProgrammingError:
+                con.rollback()
+
+        con.close()
+        con = psycopg2.connect(database='{tmp_db}'.format(tmp_db=db.TEMP_DATABASE_NAME), user=db.USER)
+        cursor = con.cursor()
+        query = '''
+        ALTER DATABASE {base} RENAME TO {base}_{state};
+        ALTER DATABASE {target} RENAME TO {base};
+        '''.format(base=db.NAME, state=new_state, target=target)
+        try:
+            cursor.execute(query)
+            con.commit()
+        except psycopg2.ProgrammingError:
+            print "Unexpected Error"
+            return False
+        finally:
+            if con:
+                con.close()
+
     def execute(self, options):
         if options[0] == '--help':
             print self.helptext
             return False
         # temp db
+        os.system("dropdb {tmp_db}".format(tmp_db=db.TEMP_DATABASE_NAME))
         os.system("createdb {tmp_db} -O {user} ".format(tmp_db=db.TEMP_DATABASE_NAME, user=db.USER))
 
         target = '{base}_{target}'.format(base=db.NAME, target=options[0])
@@ -263,45 +313,15 @@ class LoadDB(CommandBase):
                 cursor.execute(query)
                 new_state = cursor.fetchone()[0]
             except psycopg2.ProgrammingError:
-                print "Hmm, we can't seem to find a status to stash your current working database under\nWould you mind providing us a status to use?"
-                new_state = sys.stdin.readline().strip()
-                while ('{base}_{state}'.format(base=db.NAME, state=new_state) in rows):
-                    print "A database already has this status, create with a timestamp? (Y/N)"
-                    if sys.stdin.readline().strip().lower() == 'y':
-                        time = datetime.datetime.now().strftime('%b%d_%H_%M')
-                        new_state += time
-                    else:
-                        print "Would you mind providing us a status to use?"
-                        new_state = sys.stdin.readline().strip()
+                print "This database is not a tracked state, would you like to save it?(Y/N)"
+                con.rollback()
+                if sys.stdin.readline().strip().lower() == 'y':
+                    self.switch(con, cursor, target, rows)
+                else:
+                    self.overwrite(con, cursor, target, rows)
 
-                query = '''
-                    CREATE TABLE {table} (
-                        name char(255) PRIMARY KEY
-                    );
-                    INSERT INTO {table} VALUES ('{state}');
-                '''.format(table=db.STATE_TABLE_NAME, state=new_state)
-                cursor.execute(query)
-                con.commit()
-            con.close()
-                
-            con = psycopg2.connect(database='{tmp_db}'.format(tmp_db=db.TEMP_DATABASE_NAME), user=db.USER)
-            cursor = con.cursor()
-            query = '''
-                ALTER DATABASE {base} RENAME TO {base}_{state};
-                ALTER DATABASE {target} RENAME TO {base};
-            '''.format(base=db.NAME, state=new_state, target=target)
-            try:
-                cursor.execute(query)
-                con.commit()
-            except psycopg2.ProgrammingError:
-                print "Unexpected Error"
-                return False
-            finally:
-
-                if con:
-                    con.close()
-                    
-            os.system("dropdb {tmp_db}".format(tmp_db=db.TEMP_DATABASE_NAME))
+            self.switch(con, cursor, target, rows, new_state)
+        os.system("dropdb {tmp_db}".format(tmp_db=db.TEMP_DATABASE_NAME))
 
 class ListDB(CommandBase):
     subcommand = 'listall'
@@ -353,3 +373,73 @@ class ListDB(CommandBase):
         finally:
             if con:
                 con.close()
+
+class DropDB(CommandBase):
+    subcommand = 'drop_db'
+    helptext = 'This command removes all database states you specify {blue}(all if left blank){end}'.format(blue=bcolors.OKBLUE, end=bcolors.ENDC)
+    argumentstext = "python db_management.py drop_all arg1 arg2 arg3"
+
+    def __init__(self, options=[]):
+        self.options = self.legal_args(options)
+
+    def legal_args(self, options=[]):
+        if len(options) == 0:
+            return [None]
+        elif options[0] == '--help':
+            return options
+        else:
+            for el in options:
+                if not re.match(r"^[a-zA-Z_]*$",el):
+                    self.error = "One or more illegal state names."
+                    return False
+            return options
+
+
+    def help(self):
+        print self.helptext
+
+    def execute(self, options):
+        name = ''
+        delete_all = False
+        if options[0] is None:
+            delete_all = True
+        elif options[0] == '--help':
+            self.help()
+            return False
+        con = psycopg2.connect(database=db.NAME, user=db.USER)
+        cursor = con.cursor()
+        query = '''
+            SELECT datname FROM pg_database WHERE datistemplate = false and datname LIKE '{base}%' and datname NOT LIKE '{base}';
+        '''.format(base=db.NAME)
+        try:
+            cursor.execute(query)
+            rows = [result[0].strip() for result in cursor.fetchall()]
+        except psycopg2.ProgrammingError, e:
+            con.rollback()
+            print e
+
+        if delete_all:
+            print "Are you sure you want to delete all the saved state data? (Y/N)"
+            if sys.stdin.readline().strip().lower() != 'y':
+                return False
+
+        drop_rows = rows if delete_all else ["topopps_{}".format(state) for state in options if "topopps_{}".format(state) in rows]
+
+        for row in drop_rows:
+            os.system("dropdb {db}".format(db=row))
+            print "{fail}[DELETED]: {end}{row}".format(fail=bcolors.FAIL, end=bcolors.ENDC, row=row)
+
+        try:
+            cursor.execute("SELECT name FROM {table}".format(table=db.STATE_TABLE_NAME))
+            name = cursor.fetchone()[0].strip()
+            if name in options:
+                cursor.execute("DROP TABLE {table}".format(table=db.STATE_TABLE_NAME))
+                con.commit()
+                print "Dropped tracking from working database"
+        except psycopg2.ProgrammingError:
+            pass
+
+        if len(drop_rows) == 0 and name not in options:
+            print "Nothing to delete."
+
+        con.close()

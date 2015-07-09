@@ -1,4 +1,4 @@
-from db_commands import Help, SaveDB, LoadDB, ListDB, StashDB
+from db_commands import Help, SaveDB, LoadDB, ListDB, StashDB, DropDB
 
 def get_command(args):
     if args['subcommand'] == 'help':
@@ -9,6 +9,8 @@ def get_command(args):
         return SaveDB(args['options'])
     elif args['subcommand'] == 'load_db':
         return LoadDB(args['options'])
+    elif args['subcommand'] == 'drop_db':
+        return DropDB(args['options'])
     elif args['subcommand'] == 'listall':
         return ListDB(args['options'])
     else:
