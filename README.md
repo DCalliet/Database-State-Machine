@@ -6,7 +6,7 @@ This tool is for individuals who are constantly going back and forth between ver
 of their database, and thus have to run code to re-migrate it, apply the migrations, and
 eventually wait as some script repopulates their database with data.
 
-**Intended for local database use**
+**Intended for your local POSTGRES (more later hopefully!)database use, please don't try this on a production instance**
 
 Inspired by the concept of git stash, you can stash away a current state of your database.
 This allows you to switch branches, do whatever you want to your database, and easily restore it to any saved state!
