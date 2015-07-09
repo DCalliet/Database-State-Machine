@@ -16,11 +16,12 @@ This allows you to switch branches, do whatever you want to your database, and e
 
 In the settings.py file:
 
-Set *'db.NAME'* to the name of your working database *(Please make sure it exists!)* \n
-Set *'db.USER'* to an owner of your working database *(We must have full permissions!)* \n
+Set *'db.NAME'* to the name of your working database *(Please make sure it exists!)*
+
+Set *'db.USER'* to an owner of your working database *(We must have full permissions!)*
 
 If the default *'db.STATE_TABLE_NAME'* and *'db.TEMP_DATABASE_NAME'* will conflict with
-an existing table or database (respectively) feel free to change those names! \n
+an existing table or database (respectively) feel free to change those names!
 
 ##Usage
 =======
