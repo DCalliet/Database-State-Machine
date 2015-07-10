@@ -1,4 +1,4 @@
-#!/user/bin/env python
+#! /usr/bin/env python
 import os, sys
 from db_tools.db_utility import DBUtility
 
