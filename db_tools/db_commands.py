@@ -318,7 +318,7 @@ class LoadDB(CommandBase):
                 if sys.stdin.readline().strip().lower() == 'y':
                     self.switch(con, cursor, target, rows)
                 else:
-                    self.overwrite(con, cursor, target, rows)
+                    self.overwrite(con, cursor, target)
 
             self.switch(con, cursor, target, rows, new_state)
         os.system("dropdb {tmp_db}".format(tmp_db=db.TEMP_DATABASE_NAME))
